@@ -1,16 +1,16 @@
 import './App.css'
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import type {TrackDataItem, TrackResponse, TracksResponse} from "./types/types.ts";
 
 export function App() {
 
     const [tracks, setTracks] = useState<TrackDataItem[]>([])
-    const [isLoading, setIsLoading] = useState<boolean>(true)
+    const [isListLoading, setIsListLoading] = useState<boolean>(true)
+    const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false)
     const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
     const [selectedTrack, setSelectedTrack] = useState<TrackResponse | null>(null)
 
-    // const clickedTrack = tracks.find(
-    //     t => t.id === selectedTrack?.id)
+    const abortControllerRef = useRef<AbortController | null>(null)
 
     useEffect(() => {
         fetch('https://musicfun.it-incubator.app/api/1.0/playlists/tracks', {
@@ -22,13 +22,19 @@ export function App() {
             .then((json: TracksResponse) => {
                 console.log(json)
                 setTracks(json.data)
-                setIsLoading(false)
+                setIsListLoading(false)
             })
     }, []);
 
-    useEffect(() => {
-        if (!selectedTrackId) return
-        fetch('https://musicfun.it-incubator.app/api/1.0/playlists/tracks' + selectedTrackId, {
+    const handleSelectTrack = (trackId: string) => {
+        setSelectedTrackId(trackId)
+        setIsDetailLoading(true)
+
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = new AbortController();
+
+        fetch(`https://musicfun.it-incubator.app/api/1.0/playlists/tracks/${trackId}`, {
+            signal: abortControllerRef.current.signal,
             headers: {
                 'API-KEY': '9778dd46-146a-43ee-b515-46ccd9995305'
             }
@@ -36,8 +42,9 @@ export function App() {
             .then(res => res.json())
             .then((json: TrackResponse) => {
                 setSelectedTrack(json)
+                setIsDetailLoading(false)
             })
-    }, [selectedTrackId]);
+    }
 
     return (
         <div>
@@ -46,16 +53,14 @@ export function App() {
                 <ul>
                     <h2>List</h2>
                     {
-                        isLoading && <p>Loading....</p>
+                        isListLoading && <p>Loading....</p>
                     }
                     {tracks.map((track) => {
-                        const color = track.id === selectedTrack?.data.id ? 'green' : 'white';
+                        const color = track.id === selectedTrackId ? 'green' : 'white';
                         return (
                             <li key={track.id}>
                                 <h4 style={{color}}
-                                    onClick={() => {
-                                        setSelectedTrackId(track.id)
-                                    }}
+                                    onClick={() => handleSelectTrack(track.id)}
                                 >
                                     {track.attributes.title}
                                 </h4>
@@ -68,11 +73,15 @@ export function App() {
                 </ul>
                 <div>
                     <h2>Details</h2>
-                    {selectedTrack && <div>
+                    {
+                        isDetailLoading && <p>Loading....</p>
+                    }
+                    {!isDetailLoading && selectedTrack && <div>
                         <div>{selectedTrack.data.attributes.title}</div>
                         <div>{selectedTrack.data.attributes.addedAt}</div>
                         <div>likes: {selectedTrack.data.attributes.likesCount}</div>
-                    </div>}
+                    </div>
+                    }
                 </div>
             </div>
         </div>
